@@ -115,12 +115,19 @@ function cubesOnFace(face) {
 // === Touch Events ===
 window.addEventListener('touchstart', (e) => {
   if (rotating) return;
-  if (e.touches.length === 2) {
-    controls.enabled = false; // disable camera orbit
 
-    // average of 2 touches
-    const x = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-    const y = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+  // --- Two fingers = orbit the cube ---
+  if (e.touches.length === 2) {
+    controls.enabled = true;
+    return;
+  }
+
+  // --- Single finger = start potential layer rotation ---
+  if (e.touches.length === 1) {
+    controls.enabled = false; // disable orbit while swiping face
+
+    const x = e.touches[0].clientX;
+    const y = e.touches[0].clientY;
 
     pointer.x = (x / innerWidth) * 2 - 1;
     pointer.y = -(y / innerHeight) * 2 + 1;
@@ -131,58 +138,66 @@ window.addEventListener('touchstart', (e) => {
     touchedFace = dominantFaceFromNormal(
       hit.face.normal.clone().transformDirection(hit.object.matrixWorld)
     );
-
-    // save start point in screen space
     twoTouchStart = { x, y };
 
-    // store world axis (so rotations follow current cube orientation)
     const localAxis = FACE_AXES[touchedFace].clone();
-    startVector = cubeGroup.localToWorld(localAxis).sub(cubeGroup.getWorldPosition(new THREE.Vector3())).normalize();
+    startVector = cubeGroup
+      .localToWorld(localAxis)
+      .sub(cubeGroup.getWorldPosition(new THREE.Vector3()))
+      .normalize();
   }
 });
 
 window.addEventListener('touchmove', (e) => {
-  if (!twoTouchStart || rotating) return;
-  if (e.touches.length !== 2) return;
+  if (rotating) return;
 
-  const x = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-  const y = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-  const dx = x - twoTouchStart.x;
-  const dy = y - twoTouchStart.y;
+  // --- Handle single-finger swipe to rotate face ---
+  if (e.touches.length === 1 && twoTouchStart && touchedFace) {
+    const x = e.touches[0].clientX;
+    const y = e.touches[0].clientY;
+    const dx = x - twoTouchStart.x;
+    const dy = y - twoTouchStart.y;
 
-  // threshold
-  if (Math.hypot(dx, dy) < 40) return;
+    if (Math.hypot(dx, dy) < 40) return;
 
-  rotating = true;
-  const faceCubes = cubesOnFace(touchedFace);
-  layerGroup = new THREE.Group();
-  faceCubes.forEach(c => layerGroup.add(c));
-  cubeGroup.add(layerGroup);
+    rotating = true;
+    const faceCubes = cubesOnFace(touchedFace);
+    layerGroup = new THREE.Group();
+    faceCubes.forEach(c => layerGroup.add(c));
+    cubeGroup.add(layerGroup);
 
-  // rotation direction
-  const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 1 : -1) : (dy > 0 ? -1 : 1);
-  const targetAngle = dir * Math.PI / 2;
-  const axis = startVector.clone();
-  const duration = 250;
-  const start = performance.now();
+    const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 1 : -1) : (dy > 0 ? -1 : 1);
+    const targetAngle = dir * Math.PI / 2;
+    const axis = startVector.clone();
+    const duration = 250;
+    const start = performance.now();
 
-  function animateTurn(t) {
-    const k = Math.min(1, (t - start) / duration);
-    const ease = k * k * (3 - 2 * k);
-    layerGroup.setRotationFromAxisAngle(axis, targetAngle * ease);
-    if (k < 1) requestAnimationFrame(animateTurn);
-    else bakeLayer(faceCubes);
+    function animateTurn(t) {
+      const k = Math.min(1, (t - start) / duration);
+      const ease = k * k * (3 - 2 * k);
+      layerGroup.setRotationFromAxisAngle(axis, targetAngle * ease);
+      if (k < 1) requestAnimationFrame(animateTurn);
+      else bakeLayer(faceCubes);
+    }
+    requestAnimationFrame(animateTurn);
   }
-  requestAnimationFrame(animateTurn);
 });
 
-window.addEventListener('touchend', () => {
+window.addEventListener('touchend', (e) => {
+  if (e.touches.length >= 2) {
+    // still multi-touch → keep controls
+    controls.enabled = true;
+    return;
+  }
+
+  // reset everything
   if (!rotating) {
     twoTouchStart = null;
     touchedFace = null;
-    controls.enabled = true;
+    controls.enabled = true; // restore orbit
   }
 });
+
 
 // bake world positions back into cubeGroup after rotation
 function bakeLayer(cubes) {
