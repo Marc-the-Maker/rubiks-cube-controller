@@ -68,4 +68,122 @@ function animate() {
   controls.update();
   renderer.render(scene, camera);
 }
+
+// === Swipe + Cube Interaction ===
+
+// Raycaster for detecting which cubelet was clicked
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+
+// Track swipe start and end
+let swipeStart = null;
+let selectedCubelet = null;
+
+// Listen for pointer down (or touch start)
+window.addEventListener('pointerdown', (event) => {
+  // Convert mouse coords to NDC
+  pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+  pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+  // Cast ray
+  raycaster.setFromCamera(pointer, camera);
+  const intersects = raycaster.intersectObjects(cubeGroup.children);
+
+  if (intersects.length > 0) {
+    selectedCubelet = intersects[0].object;
+    swipeStart = { x: event.clientX, y: event.clientY };
+  }
+});
+
+window.addEventListener('pointerup', (event) => {
+  if (!selectedCubelet || !swipeStart) return;
+
+  const dx = event.clientX - swipeStart.x;
+  const dy = event.clientY - swipeStart.y;
+
+  const absX = Math.abs(dx);
+  const absY = Math.abs(dy);
+
+  // Only trigger if swipe is significant
+  if (Math.max(absX, absY) < 30) {
+    selectedCubelet = null;
+    swipeStart = null;
+    return;
+  }
+
+  // Determine swipe direction (4 directions)
+  let direction;
+  if (absX > absY) direction = dx > 0 ? 'right' : 'left';
+  else direction = dy > 0 ? 'down' : 'up';
+
+  // Figure out which face we swiped on
+  const normal = selectedCubelet.getWorldDirection(new THREE.Vector3());
+  const face = getDominantAxis(normal);
+
+  // Rotate appropriate layer
+  rotateLayer(face, direction);
+
+  selectedCubelet = null;
+  swipeStart = null;
+});
+
+function getDominantAxis(vector) {
+  const abs = {
+    x: Math.abs(vector.x),
+    y: Math.abs(vector.y),
+    z: Math.abs(vector.z),
+  };
+  if (abs.x > abs.y && abs.x > abs.z) return vector.x > 0 ? 'R' : 'L';
+  if (abs.y > abs.x && abs.y > abs.z) return vector.y > 0 ? 'U' : 'D';
+  return vector.z > 0 ? 'F' : 'B';
+}
+
+// === Simple cube-layer rotation logic ===
+function rotateLayer(face, direction) {
+  const layerCubes = cubeGroup.children.filter((cubelet) => {
+    const pos = cubelet.position.clone().round();
+    if (face === 'U') return pos.y === 1;
+    if (face === 'D') return pos.y === -1;
+    if (face === 'L') return pos.x === -1;
+    if (face === 'R') return pos.x === 1;
+    if (face === 'F') return pos.z === 1;
+    if (face === 'B') return pos.z === -1;
+  });
+
+  const layerGroup = new THREE.Group();
+  layerCubes.forEach((c) => layerGroup.add(c));
+  cubeGroup.add(layerGroup);
+
+  const axis = {
+    U: new THREE.Vector3(0, 1, 0),
+    D: new THREE.Vector3(0, -1, 0),
+    L: new THREE.Vector3(-1, 0, 0),
+    R: new THREE.Vector3(1, 0, 0),
+    F: new THREE.Vector3(0, 0, 1),
+    B: new THREE.Vector3(0, 0, -1),
+  }[face];
+
+  // Determine rotation direction (clockwise vs counterclockwise)
+  const sign = direction === 'right' || direction === 'up' ? -1 : 1;
+
+  // Animate the rotation
+  const duration = 250; // ms
+  const start = performance.now();
+
+  const animateRotation = (time) => {
+    const t = Math.min(1, (time - start) / duration);
+    const angle = sign * (Math.PI / 2) * t;
+    layerGroup.rotation.setFromVector3(axis.clone().multiplyScalar(angle));
+
+    if (t < 1) requestAnimationFrame(animateRotation);
+    else {
+      // finalize
+      layerGroup.rotation.set(0, 0, 0);
+      layerCubes.forEach((c) => cubeGroup.add(c));
+      cubeGroup.remove(layerGroup);
+    }
+  };
+  requestAnimationFrame(animateRotation);
+}
+
 animate();
