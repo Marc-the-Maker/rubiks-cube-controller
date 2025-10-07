@@ -1,5 +1,6 @@
-import * as THREE from "./vendor/three.module.js";
-import { OrbitControls } from "./vendor/jsm/controls/OrbitControls.js";
+// Import directly from the unpkg CDN (browser-compatible modules)
+import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
 
 // === Scene Setup ===
 const scene = new THREE.Scene();
