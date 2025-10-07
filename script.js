@@ -45,6 +45,7 @@ for (let x = -1; x <= 1; x++) {
         new THREE.MeshLambertMaterial({ color: z === 1 ? colors.F : 0x222222 }), // front
         new THREE.MeshLambertMaterial({ color: z === -1 ? colors.B : 0x222222 }), // back
       ];
+
       const cubelet = new THREE.Mesh(
         new THREE.BoxGeometry(0.95, 0.95, 0.95),
         materials
