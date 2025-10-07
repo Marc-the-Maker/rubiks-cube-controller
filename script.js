@@ -1,10 +1,8 @@
-// Import directly from the unpkg CDN (browser-compatible modules)
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
 
-// === Scene Setup ===
+// Scene setup
 const scene = new THREE.Scene();
-
 const camera = new THREE.PerspectiveCamera(
   45,
   window.innerWidth / window.innerHeight,
@@ -18,35 +16,30 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x111111);
 document.body.appendChild(renderer.domElement);
 
-// === Lights ===
+// Lights
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-const directional = new THREE.DirectionalLight(0xffffff, 0.8);
-directional.position.set(5, 5, 5);
-scene.add(directional);
+const light = new THREE.DirectionalLight(0xffffff, 0.8);
+light.position.set(5, 5, 5);
+scene.add(light);
 
-// === Rubik's Cube ===
+// Build solved Rubik’s cube
 const colors = {
-  U: 0xffffff, // white
-  D: 0xffff00, // yellow
-  L: 0xff8000, // orange
-  R: 0xff0000, // red
-  F: 0x00ff00, // green
-  B: 0x0000ff, // blue
+  U: 0xffffff, D: 0xffff00,
+  L: 0xff8000, R: 0xff0000,
+  F: 0x00ff00, B: 0x0000ff
 };
-
 const cubeGroup = new THREE.Group();
 for (let x = -1; x <= 1; x++) {
   for (let y = -1; y <= 1; y++) {
     for (let z = -1; z <= 1; z++) {
       const materials = [
-        new THREE.MeshLambertMaterial({ color: x === 1 ? colors.R : 0x222222 }), // right
-        new THREE.MeshLambertMaterial({ color: x === -1 ? colors.L : 0x222222 }), // left
-        new THREE.MeshLambertMaterial({ color: y === 1 ? colors.U : 0x222222 }), // top
-        new THREE.MeshLambertMaterial({ color: y === -1 ? colors.D : 0x222222 }), // bottom
-        new THREE.MeshLambertMaterial({ color: z === 1 ? colors.F : 0x222222 }), // front
-        new THREE.MeshLambertMaterial({ color: z === -1 ? colors.B : 0x222222 }), // back
+        new THREE.MeshLambertMaterial({ color: x === 1 ? colors.R : 0x222222 }),
+        new THREE.MeshLambertMaterial({ color: x === -1 ? colors.L : 0x222222 }),
+        new THREE.MeshLambertMaterial({ color: y === 1 ? colors.U : 0x222222 }),
+        new THREE.MeshLambertMaterial({ color: y === -1 ? colors.D : 0x222222 }),
+        new THREE.MeshLambertMaterial({ color: z === 1 ? colors.F : 0x222222 }),
+        new THREE.MeshLambertMaterial({ color: z === -1 ? colors.B : 0x222222 }),
       ];
-
       const cubelet = new THREE.Mesh(
         new THREE.BoxGeometry(0.95, 0.95, 0.95),
         materials
@@ -58,21 +51,19 @@ for (let x = -1; x <= 1; x++) {
 }
 scene.add(cubeGroup);
 
-// === Controls ===
+// Controls
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.enablePan = false;
 controls.rotateSpeed = 0.9;
 
-// === Resize Handling ===
 window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// === Animation Loop ===
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
