@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-// Scene, camera, renderer
+// === Scene, Camera, Renderer ===
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 100);
 camera.position.set(5, 5, 6);
@@ -11,34 +11,34 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.setClearColor(0x111111);
 document.body.appendChild(renderer.domElement);
 
-// Lights
+// === Lighting ===
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 const dir = new THREE.DirectionalLight(0xffffff, 0.8);
 dir.position.set(5, 5, 5);
 scene.add(dir);
 
-// Cube colors
+// === Cube Colors ===
 const colors = {
-  U: 0xffffff,
-  D: 0xffff00,
-  L: 0xff8000,
-  R: 0xff0000,
-  F: 0x00ff00,
-  B: 0x0000ff,
+  U: 0xffffff, // white
+  D: 0xffff00, // yellow
+  L: 0xff8000, // orange
+  R: 0xff0000, // red
+  F: 0x00ff00, // green
+  B: 0x0000ff, // blue
 };
 
-// Build cube
+// === Build 3x3 Cube ===
 const cubeGroup = new THREE.Group();
 for (let x = -1; x <= 1; x++) {
   for (let y = -1; y <= 1; y++) {
     for (let z = -1; z <= 1; z++) {
       const mats = [
-        new THREE.MeshLambertMaterial({ color: x === 1 ? colors.R : 0x222222 }),
-        new THREE.MeshLambertMaterial({ color: x === -1 ? colors.L : 0x222222 }),
-        new THREE.MeshLambertMaterial({ color: y === 1 ? colors.U : 0x222222 }),
-        new THREE.MeshLambertMaterial({ color: y === -1 ? colors.D : 0x222222 }),
-        new THREE.MeshLambertMaterial({ color: z === 1 ? colors.F : 0x222222 }),
-        new THREE.MeshLambertMaterial({ color: z === -1 ? colors.B : 0x222222 }),
+        new THREE.MeshLambertMaterial({ color: x === 1 ? colors.R : 0x222222 }), // right
+        new THREE.MeshLambertMaterial({ color: x === -1 ? colors.L : 0x222222 }), // left
+        new THREE.MeshLambertMaterial({ color: y === 1 ? colors.U : 0x222222 }), // top
+        new THREE.MeshLambertMaterial({ color: y === -1 ? colors.D : 0x222222 }), // bottom
+        new THREE.MeshLambertMaterial({ color: z === 1 ? colors.F : 0x222222 }), // front
+        new THREE.MeshLambertMaterial({ color: z === -1 ? colors.B : 0x222222 }), // back
       ];
       const cubelet = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.95, 0.95), mats);
       cubelet.position.set(x, y, z);
@@ -48,40 +48,40 @@ for (let x = -1; x <= 1; x++) {
 }
 scene.add(cubeGroup);
 
-// Controls
+// === Orbit Controls ===
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.enablePan = false;
 controls.rotateSpeed = 0.9;
 
-// Resize
+// === Resize Handler ===
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
 
-// Animate
+// === Animate Loop ===
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
   renderer.render(scene, camera);
 }
 
-// === 2-Finger Cube Layer Rotation ===
+// === Gesture + Rotation Logic ===
 
 // ---- Helpers ----
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
 let rotating = false;
-let twoTouchStart = null;
+let touchStart = null;
 let touchedFace = null;
 let layerGroup = null;
 let startVector = null;
 
-// Axis for each face in LOCAL cube space (we’ll transform later)
+// Face axes in cube-local space
 const FACE_AXES = {
   F: new THREE.Vector3(0, 0, 1),
   B: new THREE.Vector3(0, 0, -1),
@@ -91,7 +91,7 @@ const FACE_AXES = {
   L: new THREE.Vector3(-1, 0, 0),
 };
 
-// Determine dominant world-space face normal
+// Determine which face was touched
 function dominantFaceFromNormal(normal) {
   const abs = normal.clone().set(Math.abs(normal.x), Math.abs(normal.y), Math.abs(normal.z));
   if (abs.x > abs.y && abs.x > abs.z) return normal.x > 0 ? 'R' : 'L';
@@ -99,7 +99,7 @@ function dominantFaceFromNormal(normal) {
   return normal.z > 0 ? 'F' : 'B';
 }
 
-// Pick all cubelets on that face (rounded local positions)
+// Get all cubelets on that face
 function cubesOnFace(face) {
   return cubeGroup.children.filter(c => {
     const p = c.position.clone().round();
@@ -112,19 +112,34 @@ function cubesOnFace(face) {
   });
 }
 
+// === Determine clockwise vs counterclockwise ===
+function turnSign(face, dx, dy) {
+  const horiz = Math.abs(dx) >= Math.abs(dy);
+
+  switch (face) {
+    case 'F': return horiz ? (dx > 0 ? -1 : 1) : (dy > 0 ? 1 : -1);
+    case 'B': return horiz ? (dx > 0 ? 1 : -1) : (dy > 0 ? -1 : 1);
+    case 'U': return horiz ? (dx > 0 ? 1 : -1) : (dy > 0 ? 1 : -1);
+    case 'D': return horiz ? (dx > 0 ? -1 : 1) : (dy > 0 ? -1 : 1);
+    case 'R': return horiz ? (dx > 0 ? 1 : -1) : (dy > 0 ? -1 : 1);
+    case 'L': return horiz ? (dx > 0 ? -1 : 1) : (dy > 0 ? 1 : -1);
+    default:  return 1;
+  }
+}
+
 // === Touch Events ===
 window.addEventListener('touchstart', (e) => {
   if (rotating) return;
 
-  // --- Two fingers = orbit the cube ---
+  // Two fingers = orbit the cube
   if (e.touches.length === 2) {
     controls.enabled = true;
     return;
   }
 
-  // --- Single finger = start potential layer rotation ---
+  // One finger = potential layer rotation
   if (e.touches.length === 1) {
-    controls.enabled = false; // disable orbit while swiping face
+    controls.enabled = false;
 
     const x = e.touches[0].clientX;
     const y = e.touches[0].clientY;
@@ -138,7 +153,7 @@ window.addEventListener('touchstart', (e) => {
     touchedFace = dominantFaceFromNormal(
       hit.face.normal.clone().transformDirection(hit.object.matrixWorld)
     );
-    twoTouchStart = { x, y };
+    touchStart = { x, y };
 
     const localAxis = FACE_AXES[touchedFace].clone();
     startVector = cubeGroup
@@ -151,12 +166,12 @@ window.addEventListener('touchstart', (e) => {
 window.addEventListener('touchmove', (e) => {
   if (rotating) return;
 
-  // --- Handle single-finger swipe to rotate face ---
-  if (e.touches.length === 1 && twoTouchStart && touchedFace) {
+  // Handle one-finger swipe to rotate face
+  if (e.touches.length === 1 && touchStart && touchedFace) {
     const x = e.touches[0].clientX;
     const y = e.touches[0].clientY;
-    const dx = x - twoTouchStart.x;
-    const dy = y - twoTouchStart.y;
+    const dx = x - touchStart.x;
+    const dy = y - touchStart.y;
 
     if (Math.hypot(dx, dy) < 40) return;
 
@@ -166,8 +181,8 @@ window.addEventListener('touchmove', (e) => {
     faceCubes.forEach(c => layerGroup.add(c));
     cubeGroup.add(layerGroup);
 
-    const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 1 : -1) : (dy > 0 ? -1 : 1);
-    const targetAngle = dir * Math.PI / 2;
+    const sign = turnSign(touchedFace, dx, dy);
+    const targetAngle = sign * Math.PI / 2;
     const axis = startVector.clone();
     const duration = 250;
     const start = performance.now();
@@ -185,24 +200,22 @@ window.addEventListener('touchmove', (e) => {
 
 window.addEventListener('touchend', (e) => {
   if (e.touches.length >= 2) {
-    // still multi-touch → keep controls
     controls.enabled = true;
     return;
   }
 
-  // reset everything
   if (!rotating) {
-    twoTouchStart = null;
+    touchStart = null;
     touchedFace = null;
-    controls.enabled = true; // restore orbit
+    controls.enabled = true;
   }
 });
 
-
-// bake world positions back into cubeGroup after rotation
+// === Bake world positions back into cubeGroup ===
 function bakeLayer(cubes) {
   layerGroup.updateMatrixWorld(true);
   const pos = new THREE.Vector3(), quat = new THREE.Quaternion(), scl = new THREE.Vector3();
+
   for (const c of cubes) {
     c.updateMatrixWorld(true);
     c.matrixWorld.decompose(pos, quat, scl);
@@ -211,12 +224,14 @@ function bakeLayer(cubes) {
     c.quaternion.copy(quat);
     cubeGroup.add(c);
   }
+
   cubeGroup.remove(layerGroup);
   layerGroup = null;
   rotating = false;
-  twoTouchStart = null;
+  touchStart = null;
   touchedFace = null;
   controls.enabled = true;
 }
 
+// === Start Animation ===
 animate();
