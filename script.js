@@ -69,121 +69,139 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-// === Swipe + Cube Interaction ===
+// === 2-Finger Cube Layer Rotation ===
 
-// Raycaster for detecting which cubelet was clicked
+// ---- Helpers ----
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
-// Track swipe start and end
-let swipeStart = null;
-let selectedCubelet = null;
+let rotating = false;
+let twoTouchStart = null;
+let touchedFace = null;
+let layerGroup = null;
+let startVector = null;
 
-// Listen for pointer down (or touch start)
-window.addEventListener('pointerdown', (event) => {
-  // Convert mouse coords to NDC
-  pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
-  pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+// Axis for each face in LOCAL cube space (we’ll transform later)
+const FACE_AXES = {
+  F: new THREE.Vector3(0, 0, 1),
+  B: new THREE.Vector3(0, 0, -1),
+  U: new THREE.Vector3(0, 1, 0),
+  D: new THREE.Vector3(0, -1, 0),
+  R: new THREE.Vector3(1, 0, 0),
+  L: new THREE.Vector3(-1, 0, 0),
+};
 
-  // Cast ray
-  raycaster.setFromCamera(pointer, camera);
-  const intersects = raycaster.intersectObjects(cubeGroup.children);
-
-  if (intersects.length > 0) {
-    selectedCubelet = intersects[0].object;
-    swipeStart = { x: event.clientX, y: event.clientY };
-  }
-});
-
-window.addEventListener('pointerup', (event) => {
-  if (!selectedCubelet || !swipeStart) return;
-
-  const dx = event.clientX - swipeStart.x;
-  const dy = event.clientY - swipeStart.y;
-
-  const absX = Math.abs(dx);
-  const absY = Math.abs(dy);
-
-  // Only trigger if swipe is significant
-  if (Math.max(absX, absY) < 30) {
-    selectedCubelet = null;
-    swipeStart = null;
-    return;
-  }
-
-  // Determine swipe direction (4 directions)
-  let direction;
-  if (absX > absY) direction = dx > 0 ? 'right' : 'left';
-  else direction = dy > 0 ? 'down' : 'up';
-
-  // Figure out which face we swiped on
-  const normal = selectedCubelet.getWorldDirection(new THREE.Vector3());
-  const face = getDominantAxis(normal);
-
-  // Rotate appropriate layer
-  rotateLayer(face, direction);
-
-  selectedCubelet = null;
-  swipeStart = null;
-});
-
-function getDominantAxis(vector) {
-  const abs = {
-    x: Math.abs(vector.x),
-    y: Math.abs(vector.y),
-    z: Math.abs(vector.z),
-  };
-  if (abs.x > abs.y && abs.x > abs.z) return vector.x > 0 ? 'R' : 'L';
-  if (abs.y > abs.x && abs.y > abs.z) return vector.y > 0 ? 'U' : 'D';
-  return vector.z > 0 ? 'F' : 'B';
+// Determine dominant world-space face normal
+function dominantFaceFromNormal(normal) {
+  const abs = normal.clone().set(Math.abs(normal.x), Math.abs(normal.y), Math.abs(normal.z));
+  if (abs.x > abs.y && abs.x > abs.z) return normal.x > 0 ? 'R' : 'L';
+  if (abs.y > abs.x && abs.y > abs.z) return normal.y > 0 ? 'U' : 'D';
+  return normal.z > 0 ? 'F' : 'B';
 }
 
-// === Simple cube-layer rotation logic ===
-function rotateLayer(face, direction) {
-  const layerCubes = cubeGroup.children.filter((cubelet) => {
-    const pos = cubelet.position.clone().round();
-    if (face === 'U') return pos.y === 1;
-    if (face === 'D') return pos.y === -1;
-    if (face === 'L') return pos.x === -1;
-    if (face === 'R') return pos.x === 1;
-    if (face === 'F') return pos.z === 1;
-    if (face === 'B') return pos.z === -1;
+// Pick all cubelets on that face (rounded local positions)
+function cubesOnFace(face) {
+  return cubeGroup.children.filter(c => {
+    const p = c.position.clone().round();
+    if (face === 'F') return p.z === 1;
+    if (face === 'B') return p.z === -1;
+    if (face === 'U') return p.y === 1;
+    if (face === 'D') return p.y === -1;
+    if (face === 'R') return p.x === 1;
+    if (face === 'L') return p.x === -1;
   });
+}
 
-  const layerGroup = new THREE.Group();
-  layerCubes.forEach((c) => layerGroup.add(c));
+// === Touch Events ===
+window.addEventListener('touchstart', (e) => {
+  if (rotating) return;
+  if (e.touches.length === 2) {
+    controls.enabled = false; // disable camera orbit
+
+    // average of 2 touches
+    const x = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+    const y = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+
+    pointer.x = (x / innerWidth) * 2 - 1;
+    pointer.y = -(y / innerHeight) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const hit = raycaster.intersectObjects(cubeGroup.children, false)[0];
+    if (!hit) return;
+
+    touchedFace = dominantFaceFromNormal(
+      hit.face.normal.clone().transformDirection(hit.object.matrixWorld)
+    );
+
+    // save start point in screen space
+    twoTouchStart = { x, y };
+
+    // store world axis (so rotations follow current cube orientation)
+    const localAxis = FACE_AXES[touchedFace].clone();
+    startVector = cubeGroup.localToWorld(localAxis).sub(cubeGroup.getWorldPosition(new THREE.Vector3())).normalize();
+  }
+});
+
+window.addEventListener('touchmove', (e) => {
+  if (!twoTouchStart || rotating) return;
+  if (e.touches.length !== 2) return;
+
+  const x = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+  const y = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+  const dx = x - twoTouchStart.x;
+  const dy = y - twoTouchStart.y;
+
+  // threshold
+  if (Math.hypot(dx, dy) < 40) return;
+
+  rotating = true;
+  const faceCubes = cubesOnFace(touchedFace);
+  layerGroup = new THREE.Group();
+  faceCubes.forEach(c => layerGroup.add(c));
   cubeGroup.add(layerGroup);
 
-  const axis = {
-    U: new THREE.Vector3(0, 1, 0),
-    D: new THREE.Vector3(0, -1, 0),
-    L: new THREE.Vector3(-1, 0, 0),
-    R: new THREE.Vector3(1, 0, 0),
-    F: new THREE.Vector3(0, 0, 1),
-    B: new THREE.Vector3(0, 0, -1),
-  }[face];
-
-  // Determine rotation direction (clockwise vs counterclockwise)
-  const sign = direction === 'right' || direction === 'up' ? -1 : 1;
-
-  // Animate the rotation
-  const duration = 250; // ms
+  // rotation direction
+  const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 1 : -1) : (dy > 0 ? -1 : 1);
+  const targetAngle = dir * Math.PI / 2;
+  const axis = startVector.clone();
+  const duration = 250;
   const start = performance.now();
 
-  const animateRotation = (time) => {
-    const t = Math.min(1, (time - start) / duration);
-    const angle = sign * (Math.PI / 2) * t;
-    layerGroup.rotation.setFromVector3(axis.clone().multiplyScalar(angle));
+  function animateTurn(t) {
+    const k = Math.min(1, (t - start) / duration);
+    const ease = k * k * (3 - 2 * k);
+    layerGroup.setRotationFromAxisAngle(axis, targetAngle * ease);
+    if (k < 1) requestAnimationFrame(animateTurn);
+    else bakeLayer(faceCubes);
+  }
+  requestAnimationFrame(animateTurn);
+});
 
-    if (t < 1) requestAnimationFrame(animateRotation);
-    else {
-      // finalize
-      layerGroup.rotation.set(0, 0, 0);
-      layerCubes.forEach((c) => cubeGroup.add(c));
-      cubeGroup.remove(layerGroup);
-    }
-  };
-  requestAnimationFrame(animateRotation);
+window.addEventListener('touchend', () => {
+  if (!rotating) {
+    twoTouchStart = null;
+    touchedFace = null;
+    controls.enabled = true;
+  }
+});
+
+// bake world positions back into cubeGroup after rotation
+function bakeLayer(cubes) {
+  layerGroup.updateMatrixWorld(true);
+  const pos = new THREE.Vector3(), quat = new THREE.Quaternion(), scl = new THREE.Vector3();
+  for (const c of cubes) {
+    c.updateMatrixWorld(true);
+    c.matrixWorld.decompose(pos, quat, scl);
+    cubeGroup.worldToLocal(pos);
+    c.position.copy(pos.round());
+    c.quaternion.copy(quat);
+    cubeGroup.add(c);
+  }
+  cubeGroup.remove(layerGroup);
+  layerGroup = null;
+  rotating = false;
+  twoTouchStart = null;
+  touchedFace = null;
+  controls.enabled = true;
 }
 
 animate();
