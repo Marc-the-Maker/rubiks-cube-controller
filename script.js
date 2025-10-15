@@ -151,7 +151,7 @@ function swipeToRotation(face, dx, dy) {
   // Using a consistent right-handed convention and intuitive "push" feel:
   const CW = 1, CCW = -1;
   const signMap = {
-    F: { '+u': CW,  '-u': CCW, '+v': CCW, '-v': CW  },
+    F: { '+u': CCW,  '-u': CW, '+v': CCW, '-v': CW  },
     B: { '+u': CW,  '-u': CCW, '+v': CW,  '-v': CCW }, // note v reversed vs F
     U: { '+u': CW,  '-u': CCW, '+v': CW,  '-v': CCW },
     D: { '+u': CCW, '-u': CW,  '+v': CW,  '-v': CCW },
