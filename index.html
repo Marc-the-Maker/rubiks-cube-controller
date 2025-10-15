@@ -26,6 +26,8 @@
     </script>
   </head>
   <body>
-    <script type="module" src="./script.js?v=1.1"></script>
+    <script type="module">
+      import(`./script.js?cb=${Date.now()}`);
+    </script>
   </body>
 </html>
