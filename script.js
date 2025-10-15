@@ -1,6 +1,6 @@
 // CDN imports so it works without a bundler
-import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
-import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 // === Scene, Camera, Renderer ===
 const scene = new THREE.Scene();
