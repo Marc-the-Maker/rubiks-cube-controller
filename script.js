@@ -117,7 +117,7 @@ function turnSign(face, dx, dy) {
   const horiz = Math.abs(dx) >= Math.abs(dy);
 
   switch (face) {
-    case 'F': return horiz ? (dx > 0 ? -1 : 1) : (dy > 0 ? 1 : -1);
+    case 'F': return horiz ? (dx > 0 ? 1 : 1) : (dy > 0 ? 1 : -1);
     case 'B': return horiz ? (dx > 0 ? 1 : -1) : (dy > 0 ? -1 : 1);
     case 'U': return horiz ? (dx > 0 ? 1 : -1) : (dy > 0 ? 1 : -1);
     case 'D': return horiz ? (dx > 0 ? -1 : 1) : (dy > 0 ? -1 : 1);
